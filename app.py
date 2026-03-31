@@ -21,6 +21,12 @@ st.set_page_config(
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "db", "cork_civic_tracker.db")
 
+# Auto-generate database if it doesn't exist (e.g. on Streamlit Cloud)
+if not os.path.exists(DB_PATH):
+    import subprocess, sys
+    seed_script = os.path.join(os.path.dirname(__file__), "db", "seed.py")
+    subprocess.run([sys.executable, seed_script], check=True)
+
 
 # ---------------------------------------------------------------------------
 # Database helpers
