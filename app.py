@@ -20,23 +20,38 @@ st.set_page_config(
 )
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(APP_DIR, "db", "cork_civic_tracker.db")
+DB_DIR = os.path.join(APP_DIR, "db")
+DB_PATH = os.path.join(DB_DIR, "cork_civic_tracker.db")
 
-# Fallback for read-only filesystems (e.g. Streamlit Cloud)
-if not os.path.exists(DB_PATH):
-    _tmp_db = os.path.join("/tmp", "cork_civic_tracker.db")
-    if os.path.exists(_tmp_db):
-        DB_PATH = _tmp_db
+
+def _ensure_database():
+    """Create the database if it doesn't exist, handling read-only filesystems."""
+    global DB_PATH
+
+    # Check if DB already exists and has data (not a 0-byte ghost file)
+    if os.path.exists(DB_PATH) and os.path.getsize(DB_PATH) > 0:
+        return
+
+    # Determine writable location: try db/ first, fall back to /tmp
+    if os.access(DB_DIR, os.W_OK):
+        target = DB_PATH
     else:
-        import sys
-        sys.path.insert(0, os.path.join(APP_DIR, "db"))
-        import seed as _seed
-        _seed.main()
-        # seed.py writes to whichever path is writable
-        if os.path.exists(DB_PATH):
-            pass
-        elif os.path.exists(_tmp_db):
-            DB_PATH = _tmp_db
+        target = os.path.join("/tmp", "cork_civic_tracker.db")
+        if os.path.exists(target) and os.path.getsize(target) > 0:
+            DB_PATH = target
+            return
+
+    # Tell seed.py where to write, then run it
+    os.environ["CORK_DB_PATH"] = target
+    import sys
+    sys.path.insert(0, DB_DIR)
+    import seed as _seed
+    _seed.DB_PATH = target
+    _seed.main()
+    DB_PATH = target
+
+
+_ensure_database()
 
 
 # ---------------------------------------------------------------------------
