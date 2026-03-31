@@ -19,13 +19,24 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "db", "cork_civic_tracker.db")
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(APP_DIR, "db", "cork_civic_tracker.db")
 
-# Auto-generate database if it doesn't exist (e.g. on Streamlit Cloud)
+# Fallback for read-only filesystems (e.g. Streamlit Cloud)
 if not os.path.exists(DB_PATH):
-    import subprocess, sys
-    seed_script = os.path.join(os.path.dirname(__file__), "db", "seed.py")
-    subprocess.run([sys.executable, seed_script], check=True)
+    _tmp_db = os.path.join("/tmp", "cork_civic_tracker.db")
+    if os.path.exists(_tmp_db):
+        DB_PATH = _tmp_db
+    else:
+        import sys
+        sys.path.insert(0, os.path.join(APP_DIR, "db"))
+        import seed as _seed
+        _seed.main()
+        # seed.py writes to whichever path is writable
+        if os.path.exists(DB_PATH):
+            pass
+        elif os.path.exists(_tmp_db):
+            DB_PATH = _tmp_db
 
 
 # ---------------------------------------------------------------------------
