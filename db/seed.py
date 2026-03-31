@@ -10,15 +10,10 @@ from datetime import datetime, timedelta
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_PATH = os.path.join(SCRIPT_DIR, "schema.sql")
-
-# Try writing DB alongside schema.sql; fall back to /tmp if read-only (e.g. Streamlit Cloud)
-_candidate = os.path.join(SCRIPT_DIR, "cork_civic_tracker.db")
-try:
-    with open(_candidate, "a"):
-        pass
-    DB_PATH = _candidate
-except OSError:
-    DB_PATH = os.path.join("/tmp", "cork_civic_tracker.db")
+DB_PATH = os.environ.get(
+    "CORK_DB_PATH",
+    os.path.join(SCRIPT_DIR, "cork_civic_tracker.db"),
+)
 
 
 def init_db():
