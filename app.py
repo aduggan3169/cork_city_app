@@ -21,37 +21,38 @@ st.set_page_config(
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_DIR = os.path.join(APP_DIR, "db")
-DB_PATH = os.path.join(DB_DIR, "cork_civic_tracker.db")
+
+# Locally: DB lives in db/. On Streamlit Cloud (or any read-only fs): use /tmp/.
+if os.access(DB_DIR, os.W_OK):
+    DB_PATH = os.path.join(DB_DIR, "cork_civic_tracker.db")
+else:
+    DB_PATH = os.path.join("/tmp", "cork_civic_tracker.db")
 
 
-def _ensure_database():
-    """Create the database if it doesn't exist, handling read-only filesystems."""
-    global DB_PATH
+def _db_has_tables():
+    """Check whether the database actually has the councillors table."""
+    if not os.path.exists(DB_PATH) or os.path.getsize(DB_PATH) == 0:
+        return False
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='councillors'"
+        )
+        result = cursor.fetchone() is not None
+        conn.close()
+        return result
+    except Exception:
+        return False
 
-    # Check if DB already exists and has data (not a 0-byte ghost file)
-    if os.path.exists(DB_PATH) and os.path.getsize(DB_PATH) > 0:
-        return
 
-    # Determine writable location: try db/ first, fall back to /tmp
-    if os.access(DB_DIR, os.W_OK):
-        target = DB_PATH
-    else:
-        target = os.path.join("/tmp", "cork_civic_tracker.db")
-        if os.path.exists(target) and os.path.getsize(target) > 0:
-            DB_PATH = target
-            return
-
-    # Tell seed.py where to write, then run it
-    os.environ["CORK_DB_PATH"] = target
+if not _db_has_tables():
     import sys
+    os.environ["CORK_DB_PATH"] = DB_PATH
     sys.path.insert(0, DB_DIR)
     import seed as _seed
-    _seed.DB_PATH = target
+    _seed.DB_PATH = DB_PATH
+    _seed.SCHEMA_PATH = os.path.join(DB_DIR, "schema.sql")
     _seed.main()
-    DB_PATH = target
-
-
-_ensure_database()
 
 
 # ---------------------------------------------------------------------------
