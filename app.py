@@ -34,22 +34,30 @@ else:
 
 
 def _db_has_tables():
-    """Check whether the database actually has the councillors table."""
+    """Check whether the database has all required tables."""
     if not os.path.exists(DB_PATH) or os.path.getsize(DB_PATH) == 0:
         return False
     try:
         conn = sqlite3.connect(DB_PATH)
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='councillors'"
-        )
-        result = cursor.fetchone() is not None
+        required = ["councillors", "motion_statements"]
+        for table in required:
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            )
+            if cursor.fetchone() is None:
+                conn.close()
+                return False
         conn.close()
-        return result
+        return True
     except Exception:
         return False
 
 
 if not _db_has_tables():
+    # Remove stale DB so seed recreates it with the full schema
+    if os.path.exists(DB_PATH):
+        os.remove(DB_PATH)
     import sys
     os.environ["CORK_DB_PATH"] = DB_PATH
     sys.path.insert(0, DB_DIR)
