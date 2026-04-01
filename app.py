@@ -25,20 +25,12 @@ DB_DIR = os.path.join(APP_DIR, "db")
 # ---------------------------------------------------------------------------
 # Database bootstrap — handles both local and Streamlit Cloud
 # ---------------------------------------------------------------------------
-_diag = []  # diagnostic messages (temporary, remove after debugging)
 
 # Locally: DB lives in db/. On Streamlit Cloud (or any read-only fs): use /tmp/.
-_db_dir_writable = os.access(DB_DIR, os.W_OK)
-if _db_dir_writable:
+if os.access(DB_DIR, os.W_OK):
     DB_PATH = os.path.join(DB_DIR, "cork_civic_tracker.db")
 else:
     DB_PATH = os.path.join("/tmp", "cork_civic_tracker.db")
-
-_diag.append(f"DB_DIR writable: {_db_dir_writable}")
-_diag.append(f"DB_PATH: {DB_PATH}")
-_diag.append(f"DB exists: {os.path.exists(DB_PATH)}")
-if os.path.exists(DB_PATH):
-    _diag.append(f"DB size: {os.path.getsize(DB_PATH)} bytes")
 
 
 def _db_has_tables():
@@ -53,36 +45,18 @@ def _db_has_tables():
         result = cursor.fetchone() is not None
         conn.close()
         return result
-    except Exception as e:
-        _diag.append(f"Table check error: {e}")
+    except Exception:
         return False
 
 
-_has_tables = _db_has_tables()
-_diag.append(f"Has tables: {_has_tables}")
-
-if not _has_tables:
-    try:
-        import sys
-        os.environ["CORK_DB_PATH"] = DB_PATH
-        sys.path.insert(0, DB_DIR)
-        import seed as _seed
-        _seed.DB_PATH = DB_PATH
-        _seed.SCHEMA_PATH = os.path.join(DB_DIR, "schema.sql")
-        _seed.main()
-        _diag.append("Seed completed OK")
-        _diag.append(f"DB size after seed: {os.path.getsize(DB_PATH)} bytes")
-    except Exception as e:
-        _diag.append(f"Seed FAILED: {type(e).__name__}: {e}")
-
-# Verify the DB is actually usable
-try:
-    _test_conn = sqlite3.connect(DB_PATH)
-    _count = _test_conn.execute("SELECT COUNT(*) FROM councillors").fetchone()[0]
-    _diag.append(f"Councillors in DB: {_count}")
-    _test_conn.close()
-except Exception as e:
-    _diag.append(f"DB verify FAILED: {type(e).__name__}: {e}")
+if not _db_has_tables():
+    import sys
+    os.environ["CORK_DB_PATH"] = DB_PATH
+    sys.path.insert(0, DB_DIR)
+    import seed as _seed
+    _seed.DB_PATH = DB_PATH
+    _seed.SCHEMA_PATH = os.path.join(DB_DIR, "schema.sql")
+    _seed.main()
 
 
 # ---------------------------------------------------------------------------
@@ -101,11 +75,6 @@ def query(sql, params=None):
     conn = get_connection()
     return pd.read_sql_query(sql, conn, params=params or [])
 
-
-# Show diagnostics at top of page (TEMPORARY — remove after fixing)
-with st.expander("🔧 Database Diagnostics (temporary)", expanded=True):
-    for msg in _diag:
-        st.code(msg)
 
 
 # ---------------------------------------------------------------------------
