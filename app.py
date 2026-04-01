@@ -380,6 +380,87 @@ def page_dashboard():
         fig4.update_layout(height=350, margin=dict(l=0, r=0, t=10, b=0))
         st.plotly_chart(fig4, use_container_width=True)
 
+    st.markdown("---")
+
+    # --- Row 3: Bottom 5 attendance by councillor + Top 5 dissenting councillors ---
+    left3, right3 = st.columns(2)
+
+    with left3:
+        st.subheader("Lowest Attendance (by Councillor)")
+        att_councillor = (
+            df_a.merge(
+                df_c[["id", "full_name", "party_short", "party_colour"]],
+                left_on="councillor_id",
+                right_on="id",
+            )
+            .groupby(["full_name", "party_short", "party_colour"])["present"]
+            .mean()
+            .reset_index()
+        )
+        att_councillor.columns = ["name", "party", "colour", "attendance_rate"]
+        att_councillor["attendance_pct"] = att_councillor["attendance_rate"] * 100
+        bottom5 = att_councillor.nsmallest(5, "attendance_pct").sort_values(
+            "attendance_pct", ascending=True
+        )
+        bottom5["label"] = bottom5["name"] + " (" + bottom5["party"] + ")"
+
+        fig5 = px.bar(
+            bottom5,
+            x="attendance_pct",
+            y="label",
+            orientation="h",
+            color="party",
+            color_discrete_map=colours,
+            labels={"label": "", "attendance_pct": "Attendance %"},
+        )
+        fig5.update_layout(
+            showlegend=False, height=350, margin=dict(l=0, r=0, t=10, b=0)
+        )
+        st.plotly_chart(fig5, use_container_width=True)
+
+    with right3:
+        st.subheader("Most Dissenting (Against + Abstained)")
+        dissent = (
+            df_v[df_v["vote"].isin(["Against", "Abstained"])]
+            .merge(
+                df_c[["id", "full_name", "party_short", "party_colour"]],
+                left_on="councillor_id",
+                right_on="id",
+            )
+        )
+        dissent_counts = (
+            dissent.groupby(["full_name", "party_short", "party_colour", "vote"])
+            .size()
+            .reset_index(name="count")
+        )
+
+        # Get top 5 by total dissenting votes
+        totals = (
+            dissent_counts.groupby(["full_name", "party_short", "party_colour"])["count"]
+            .sum()
+            .reset_index(name="total")
+            .nlargest(5, "total")
+        )
+        top5_names = totals["full_name"].tolist()
+        top5_data = dissent_counts[dissent_counts["full_name"].isin(top5_names)]
+        top5_data = top5_data.merge(totals[["full_name", "total"]], on="full_name")
+        top5_data["label"] = top5_data["full_name"] + " (" + top5_data["party_short"] + ")"
+        top5_data = top5_data.sort_values("total", ascending=True)
+
+        vote_colours = {"Against": "#F44336", "Abstained": "#FF9800"}
+        fig6 = px.bar(
+            top5_data,
+            x="count",
+            y="label",
+            orientation="h",
+            color="vote",
+            color_discrete_map=vote_colours,
+            barmode="stack",
+            labels={"label": "", "count": "Votes", "vote": ""},
+        )
+        fig6.update_layout(height=350, margin=dict(l=0, r=0, t=10, b=0))
+        st.plotly_chart(fig6, use_container_width=True)
+
 
 # ---------------------------------------------------------------------------
 # PAGE: Councillors
