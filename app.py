@@ -615,11 +615,10 @@ def page_motions():
 
             # --- Vote summary metrics ---
             m_votes = df_v[df_v["motion_id"] == motion["id"]]
+            m_statements = df_ms[df_ms["motion_id"] == motion["id"]]
+
             if len(m_votes) > 0:
                 vote_summary = m_votes["vote"].value_counts()
-                cols = st.columns(4)
-                for i, v in enumerate(["For", "Against", "Abstained", "Absent"]):
-                    cols[i].metric(v, vote_summary.get(v, 0))
 
                 # Party-level vote chart
                 party_votes = (
@@ -645,37 +644,96 @@ def page_motions():
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
-            st.markdown("---")
+                # --- Vote filter buttons ---
+                # Use a unique key per motion to avoid Streamlit widget ID clashes
+                motion_key = f"motion_{motion['id']}"
 
-            # --- Party tabs with councillor statements ---
-            st.markdown("**Councillor Statements by Party**")
+                filter_cols = st.columns(5)
+                vote_categories = ["All", "For", "Against", "Abstained", "Absent"]
+                vote_filter_colours = {
+                    "All": "primary",
+                    "For": "primary",
+                    "Against": "primary",
+                    "Abstained": "primary",
+                    "Absent": "secondary",
+                }
 
-            m_statements = df_ms[df_ms["motion_id"] == motion["id"]]
+                # Session state for this motion's filter
+                state_key = f"vote_filter_{motion_key}"
+                if state_key not in st.session_state:
+                    st.session_state[state_key] = "All"
 
-            # Only show tabs for parties that have councillors who voted on this motion
-            motion_parties = [p for p in party_order if p in m_votes["party_short"].values]
+                for i, cat in enumerate(vote_categories):
+                    count = vote_summary.get(cat, len(m_votes)) if cat != "All" else len(m_votes)
+                    label = f"{VOTE_ICONS.get(cat, '📋')} {cat} ({count})"
+                    with filter_cols[i]:
+                        if st.button(
+                            label,
+                            key=f"{motion_key}_{cat}",
+                            use_container_width=True,
+                            type="primary" if st.session_state[state_key] == cat else "secondary",
+                        ):
+                            st.session_state[state_key] = cat
+                            st.rerun()
 
-            if motion_parties:
-                tabs = st.tabs(motion_parties)
+                active_filter = st.session_state[state_key]
 
-                for tab, party_short in zip(tabs, motion_parties):
-                    with tab:
-                        # Get all councillors from this party who voted on this motion
-                        party_votes_df = m_votes[m_votes["party_short"] == party_short].sort_values("councillor_name")
+                # Apply filter
+                if active_filter == "All":
+                    filtered_votes = m_votes
+                else:
+                    filtered_votes = m_votes[m_votes["vote"] == active_filter]
 
-                        for _, voter in party_votes_df.iterrows():
-                            # Get statements for this councillor on this motion
-                            c_statements = m_statements[
+                st.markdown("---")
+
+                if len(filtered_votes) == 0:
+                    st.info(f"No councillors voted _{active_filter}_ on this motion.")
+                else:
+                    # --- Two views: filtered councillor list OR party tabs ---
+                    if active_filter != "All":
+                        # Filtered view: alphabetical list of councillors with that vote
+                        st.markdown(f"**Councillors who voted _{active_filter}_ ({len(filtered_votes)})**")
+                        for _, voter in filtered_votes.sort_values("councillor_name").iterrows():
+                            c_stmts = m_statements[
                                 m_statements["councillor_id"] == voter["councillor_id"]
                             ]
-
-                            _render_councillor_card(
-                                voter["councillor_name"],
-                                voter["vote"],
-                                c_statements,
-                                voter["party_colour"],
+                            colour_dot = f'<span style="display:inline-block;width:10px;height:10px;background:{voter["party_colour"]};border-radius:50%;margin-right:6px;"></span>'
+                            st.markdown(
+                                f"{colour_dot}**{voter['councillor_name']}** ({voter['party_short']})",
+                                unsafe_allow_html=True,
                             )
-                            st.markdown("")  # spacing between councillors
+                            if len(c_stmts) > 0:
+                                for _, stmt in c_stmts.iterrows():
+                                    sent_icon = SENTIMENT_ICONS.get(stmt["sentiment"], "")
+                                    st.markdown(f"&emsp;{sent_icon} {stmt['summary']}")
+                                    if pd.notna(stmt["quote"]) and stmt["quote"]:
+                                        st.markdown(f'&emsp;&emsp;*"{stmt["quote"]}"*')
+                            st.markdown("")
+                    else:
+                        # Default view: party tabs
+                        st.markdown("**Councillor Statements by Party**")
+                        motion_parties = [p for p in party_order if p in m_votes["party_short"].values]
+
+                        if motion_parties:
+                            tabs = st.tabs(motion_parties)
+
+                            for tab, party_short in zip(tabs, motion_parties):
+                                with tab:
+                                    party_votes_df = filtered_votes[
+                                        filtered_votes["party_short"] == party_short
+                                    ].sort_values("councillor_name")
+
+                                    for _, voter in party_votes_df.iterrows():
+                                        c_statements = m_statements[
+                                            m_statements["councillor_id"] == voter["councillor_id"]
+                                        ]
+                                        _render_councillor_card(
+                                            voter["councillor_name"],
+                                            voter["vote"],
+                                            c_statements,
+                                            voter["party_colour"],
+                                        )
+                                        st.markdown("")
 
 
 # ---------------------------------------------------------------------------
