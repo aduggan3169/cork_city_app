@@ -403,7 +403,7 @@ def page_dashboard():
         att_councillor.columns = ["name", "party", "colour", "attendance_rate"]
         att_councillor["attendance_pct"] = att_councillor["attendance_rate"] * 100
         bottom5 = att_councillor.nsmallest(5, "attendance_pct").sort_values(
-            "attendance_pct", ascending=True
+            "attendance_pct", ascending=False
         )
         bottom5["label"] = bottom5["name"] + " (" + bottom5["party"] + ")"
 
