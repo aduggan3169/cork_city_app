@@ -387,12 +387,15 @@ def page_dashboard():
 
     with left3:
         st.subheader("Lowest Attendance (by Councillor)")
+        # Merge attendance with councillor info via councillor_id
+        att_merged = df_a[["councillor_id", "present"]].merge(
+            df_c[["id", "full_name", "party_short", "party_colour"]].rename(
+                columns={"id": "councillor_id"}
+            ),
+            on="councillor_id",
+        )
         att_councillor = (
-            df_a.merge(
-                df_c[["id", "full_name", "party_short", "party_colour"]],
-                left_on="councillor_id",
-                right_on="id",
-            )
+            att_merged
             .groupby(["full_name", "party_short", "party_colour"])["present"]
             .mean()
             .reset_index()
@@ -421,11 +424,12 @@ def page_dashboard():
     with right3:
         st.subheader("Most Dissenting (Against + Abstained)")
         dissent = (
-            df_v[df_v["vote"].isin(["Against", "Abstained"])]
+            df_v[df_v["vote"].isin(["Against", "Abstained"])][["councillor_id", "vote"]]
             .merge(
-                df_c[["id", "full_name", "party_short", "party_colour"]],
-                left_on="councillor_id",
-                right_on="id",
+                df_c[["id", "full_name", "party_short", "party_colour"]].rename(
+                    columns={"id": "councillor_id"}
+                ),
+                on="councillor_id",
             )
         )
         dissent_counts = (
