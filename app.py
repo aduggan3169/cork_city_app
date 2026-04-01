@@ -23,8 +23,16 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_DIR = os.path.join(APP_DIR, "db")
 
 # ---------------------------------------------------------------------------
+# Debug mode — set to True to show diagnostics panel, False for production
+# ---------------------------------------------------------------------------
+DEBUG = True
+
+# ---------------------------------------------------------------------------
 # Database bootstrap — handles both local and Streamlit Cloud
 # ---------------------------------------------------------------------------
+
+# Required tables — add new table names here when extending the schema
+REQUIRED_TABLES = ["councillors", "motions", "votes", "motion_statements"]
 
 # Locally: DB lives in db/. On Streamlit Cloud (or any read-only fs): use /tmp/.
 if os.access(DB_DIR, os.W_OK):
@@ -32,47 +40,76 @@ if os.access(DB_DIR, os.W_OK):
 else:
     DB_PATH = os.path.join("/tmp", "cork_civic_tracker.db")
 
+_debug_log = []
 
-def _db_has_tables():
-    """Check whether the database has all required tables."""
-    if not os.path.exists(DB_PATH) or os.path.getsize(DB_PATH) == 0:
-        return False
+
+def _log(msg):
+    _debug_log.append(msg)
+
+
+def _db_check():
+    """Check which required tables exist. Returns (all_ok, details)."""
+    if not os.path.exists(DB_PATH):
+        return False, {"status": "DB file does not exist"}
+    if os.path.getsize(DB_PATH) == 0:
+        return False, {"status": "DB file is empty (0 bytes)"}
     try:
         conn = sqlite3.connect(DB_PATH)
-        required = ["councillors", "motion_statements"]
-        for table in required:
+        details = {"status": "file exists", "size": os.path.getsize(DB_PATH)}
+        missing = []
+        for table in REQUIRED_TABLES:
             cursor = conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
                 (table,),
             )
             if cursor.fetchone() is None:
-                conn.close()
-                return False
+                missing.append(table)
         conn.close()
-        return True
-    except Exception:
-        return False
+        details["missing_tables"] = missing
+        return len(missing) == 0, details
+    except Exception as e:
+        return False, {"status": f"error: {e}"}
 
 
-if not _db_has_tables():
-    # Remove stale DB so seed recreates it with the full schema
-    if os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
+_log(f"DB_PATH: {DB_PATH}")
+_log(f"DB_DIR writable: {os.access(DB_DIR, os.W_OK)}")
+
+all_ok, details = _db_check()
+_log(f"DB check: ok={all_ok}, {details}")
+
+if not all_ok:
+    # Nuke any stale DB and all associated WAL/SHM files
+    for suffix in ["", "-journal", "-wal", "-shm"]:
+        path = DB_PATH + suffix
+        if os.path.exists(path):
+            os.remove(path)
+            _log(f"Removed: {path}")
+
     import sys
     os.environ["CORK_DB_PATH"] = DB_PATH
-    sys.path.insert(0, DB_DIR)
+    if DB_DIR not in sys.path:
+        sys.path.insert(0, DB_DIR)
     import seed as _seed
     _seed.DB_PATH = DB_PATH
     _seed.SCHEMA_PATH = os.path.join(DB_DIR, "schema.sql")
-    _seed.main()
+    try:
+        _seed.main()
+        _log("Seed completed OK")
+    except Exception as e:
+        _log(f"Seed FAILED: {type(e).__name__}: {e}")
+
+    # Verify
+    all_ok2, details2 = _db_check()
+    _log(f"Post-seed check: ok={all_ok2}, {details2}")
+else:
+    _log("DB is up to date — no re-seed needed")
 
 
 # ---------------------------------------------------------------------------
 # Database helpers
 # ---------------------------------------------------------------------------
-@st.cache_resource
 def get_connection():
-    """Return a cached SQLite connection."""
+    """Return a SQLite connection. No caching — avoids stale connection issues."""
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -82,6 +119,15 @@ def query(sql, params=None):
     """Run a query and return a DataFrame."""
     conn = get_connection()
     return pd.read_sql_query(sql, conn, params=params or [])
+
+
+# ---------------------------------------------------------------------------
+# Debug panel (toggle with DEBUG flag above)
+# ---------------------------------------------------------------------------
+if DEBUG:
+    with st.sidebar.expander("Debug", expanded=False):
+        for msg in _debug_log:
+            st.text(msg)
 
 
 
