@@ -479,6 +479,154 @@ def seed_sample_data(conn, councillor_map, issue_map):
         )
     conn.commit()
 
+    # Get source IDs for linking statements to minutes
+    source_rows = conn.execute("SELECT id, title FROM sources WHERE source_type = 'Minutes'").fetchall()
+    source_map = {title: sid for sid, title in source_rows}
+
+    # --- Motion Statements (councillor speaking points from minutes) ---
+    # Motion 1: Housing emergency declaration
+    m1_title = "Motion to declare a housing emergency in Cork City"
+    m1_id = motion_map[m1_title]
+    m1_source = source_map.get("Minutes of Full Council Meeting — January 2025")
+
+    statements_data = [
+        # Motion 1: Housing emergency
+        (councillor_map["Fiona Kerins"], m1_id,
+         "Argued that Cork's housing waiting list has grown by 40% in three years and that a formal declaration would unlock emergency planning powers.",
+         "We cannot continue to treat this as business as usual when families are sleeping in cars in this city.",
+         "Supportive", m1_source),
+        (councillor_map["Dan Boyle"], m1_id,
+         "Supported the motion but urged that the declaration be tied to specific measurable targets and a 12-month review.",
+         None, "Supportive", m1_source),
+        (councillor_map["Brian McCarthy"], m1_id,
+         "Called for the declaration to include a moratorium on investment fund purchases of residential property within the city boundary.",
+         "Declaring an emergency means nothing if we don't address who is buying up the housing stock.",
+         "Supportive", m1_source),
+        (councillor_map["Joe Kavanagh"], m1_id,
+         "Expressed concern that a formal emergency declaration could deter private investment in housing construction.",
+         None, "Critical", m1_source),
+        (councillor_map["Tony Fitzgerald"], m1_id,
+         "Supported the spirit of the motion but questioned whether the council has the legal powers to enforce the measures implied.",
+         None, "Neutral", m1_source),
+        (councillor_map["Ted Tynan"], m1_id,
+         "Backed the motion and called for all council-owned land to be ring-fenced exclusively for social and affordable housing.",
+         None, "Supportive", m1_source),
+
+        # Motion 2: 30km/h zone expansion
+        (councillor_map["Oliver Moran"], motion_map["Motion to expand the 30km/h zone to all residential areas"],
+         "Presented data from the existing 30km/h pilot showing a 23% reduction in pedestrian injuries and argued for city-wide rollout.",
+         "The evidence is clear — slower speeds save lives, and residential streets should prioritise people over traffic throughput.",
+         "Supportive", m1_source),
+        (councillor_map["Laura Harmon"], motion_map["Motion to expand the 30km/h zone to all residential areas"],
+         "Spoke about the impact on school safety zones and the need for complementary traffic calming infrastructure.",
+         None, "Supportive", m1_source),
+        (councillor_map["Des Cahill"], motion_map["Motion to expand the 30km/h zone to all residential areas"],
+         "Raised concerns from business owners on the southside about delivery access and the impact on commercial traffic flow.",
+         None, "Critical", m1_source),
+        (councillor_map["Kenneth O'Flynn"], motion_map["Motion to expand the 30km/h zone to all residential areas"],
+         "Suggested a phased approach starting with areas around schools and parks rather than a blanket city-wide change.",
+         None, "Neutral", m1_source),
+
+        # Motion 3: Northern Ring Road opposition
+        (councillor_map["Dan Boyle"], motion_map["Motion to oppose the proposed Cork Northern Ring Road"],
+         "Argued the ring road would induce demand, increase car dependency, and undermine Cork's climate commitments.",
+         "You cannot build your way out of congestion. Every new road fills to capacity within a decade.",
+         "Supportive", source_map.get("Minutes of Full Council Meeting — February 2025")),
+        (councillor_map["Pádraig Rice"], motion_map["Motion to oppose the proposed Cork Northern Ring Road"],
+         "Supported opposition and called for the allocated funding to be redirected to BusConnects Cork and light rail feasibility.",
+         None, "Supportive", source_map.get("Minutes of Full Council Meeting — February 2025")),
+        (councillor_map["Fergal Dennehy"], motion_map["Motion to oppose the proposed Cork Northern Ring Road"],
+         "Opposed the motion, arguing the ring road is essential for economic development on the northside and would relieve pressure on the Dunkettle interchange.",
+         None, "Critical", source_map.get("Minutes of Full Council Meeting — February 2025")),
+        (councillor_map["Garrett Kelleher"], motion_map["Motion to oppose the proposed Cork Northern Ring Road"],
+         "Argued the ring road would bring jobs and connectivity to underserved areas and that opposing it was short-sighted.",
+         None, "Critical", source_map.get("Minutes of Full Council Meeting — February 2025")),
+        (councillor_map["Damian Boylan"], motion_map["Motion to oppose the proposed Cork Northern Ring Road"],
+         "Noted that the ring road has been part of Cork's transport strategy for decades and should not be abandoned without a viable alternative.",
+         None, "Critical", source_map.get("Minutes of Full Council Meeting — February 2025")),
+
+        # Motion 4: Community centres funding
+        (councillor_map["Tony Fitzgerald"], motion_map["Motion to increase funding for community centres"],
+         "Made an impassioned case for northside community centres as the primary social infrastructure for disadvantaged communities.",
+         "These centres are where kids do their homework, where elderly people have their only social contact of the week. Twenty percent more funding is the minimum.",
+         "Supportive", source_map.get("Minutes of Full Council Meeting — February 2025")),
+        (councillor_map["Terry Shannon"], motion_map["Motion to increase funding for community centres"],
+         "Seconded the motion and highlighted the disparity in facilities between northside and southside wards.",
+         None, "Supportive", source_map.get("Minutes of Full Council Meeting — February 2025")),
+        (councillor_map["Michelle Gould"], motion_map["Motion to increase funding for community centres"],
+         "Spoke about the role of community centres in addressing anti-social behaviour and providing alternatives for young people.",
+         None, "Supportive", source_map.get("Minutes of Full Council Meeting — February 2025")),
+
+        # Motion 5: Vacant property levy
+        (councillor_map["Brian McCarthy"], motion_map["Motion to implement a vacant property levy"],
+         "Proposed the levy as a tool to bring vacant properties back into use and argued the 12-month threshold was too generous.",
+         "There are over 800 vacant residential properties in this city while people sleep rough. A levy is the least we can do.",
+         "Supportive", source_map.get("Minutes of Full Council Meeting — March 2025")),
+        (councillor_map["Ted Tynan"], motion_map["Motion to implement a vacant property levy"],
+         "Supported the levy and called for the revenue to be ring-fenced for social housing acquisition.",
+         None, "Supportive", source_map.get("Minutes of Full Council Meeting — March 2025")),
+        (councillor_map["Colm Kelleher"], motion_map["Motion to implement a vacant property levy"],
+         "Requested deferral to allow for a full economic impact assessment and consultation with property owners.",
+         None, "Procedural", source_map.get("Minutes of Full Council Meeting — March 2025")),
+        (councillor_map["Shane O'Callaghan"], motion_map["Motion to implement a vacant property levy"],
+         "Argued the levy could penalise owners of properties undergoing renovation and called for exemptions to be clearly defined.",
+         None, "Critical", source_map.get("Minutes of Full Council Meeting — March 2025")),
+
+        # Motion 6: Fast-track social housing
+        (councillor_map["Fiona Kerins"], motion_map["Motion to fast-track social housing on council-owned land"],
+         "Identified three specific council-owned sites suitable for immediate development and called for a 6-month planning fast-track.",
+         None, "Supportive", source_map.get("Minutes of Full Council Meeting — January 2025")),
+        (councillor_map["Joe Lynch"], motion_map["Motion to fast-track social housing on council-owned land"],
+         "Supported the motion and called for local labour clauses in all social housing construction contracts.",
+         "If we're building homes for the community, the community should be building them.",
+         "Supportive", source_map.get("Minutes of Full Council Meeting — January 2025")),
+        (councillor_map["Kieran McCarthy"], motion_map["Motion to fast-track social housing on council-owned land"],
+         "Expressed support but cautioned against fast-tracking at the expense of proper heritage and environmental assessment.",
+         None, "Neutral", source_map.get("Minutes of Full Council Meeting — January 2025")),
+
+        # Motion 7: Western Road cycle lane
+        (councillor_map["Oliver Moran"], motion_map["Motion to pilot a protected cycle lane on the Western Road"],
+         "Presented the case for Western Road as a key commuter corridor with high cycling potential and poor existing infrastructure.",
+         None, "Supportive", source_map.get("Minutes of Full Council Meeting — February 2025")),
+        (councillor_map["Honoré Kamegni"], motion_map["Motion to pilot a protected cycle lane on the Western Road"],
+         "Highlighted safety data showing Western Road as one of the most dangerous routes for cyclists in the city.",
+         "Protected infrastructure is not a luxury — it is the baseline requirement for safe cycling.",
+         "Supportive", source_map.get("Minutes of Full Council Meeting — February 2025")),
+        (councillor_map["Des Cahill"], motion_map["Motion to pilot a protected cycle lane on the Western Road"],
+         "Raised concerns about the loss of on-street parking for businesses along Western Road and its impact on trade.",
+         None, "Critical", source_map.get("Minutes of Full Council Meeting — February 2025")),
+        (councillor_map["Mary Rose Desmond"], motion_map["Motion to pilot a protected cycle lane on the Western Road"],
+         "Asked whether a traffic impact study had been conducted and whether alternative routes had been considered.",
+         None, "Neutral", source_map.get("Minutes of Full Council Meeting — February 2025")),
+
+        # Motion 8: Climate action plan
+        (councillor_map["Dan Boyle"], motion_map["Motion to develop a climate action plan for Cork City"],
+         "Led the debate arguing for binding interim targets aligned with national 2030 commitments and specific sectoral goals for transport, buildings, and waste.",
+         "A plan without targets is just a wish list. Cork needs binding interim milestones.",
+         "Supportive", source_map.get("Minutes of Full Council Meeting — March 2025")),
+        (councillor_map["Oliver Moran"], motion_map["Motion to develop a climate action plan for Cork City"],
+         "Called for the plan to include a dedicated transport decarbonisation strategy and investment in cycling and public transport.",
+         None, "Supportive", source_map.get("Minutes of Full Council Meeting — March 2025")),
+        (councillor_map["Pádraig Rice"], motion_map["Motion to develop a climate action plan for Cork City"],
+         "Emphasised the need for genuine public consultation and warned against a plan developed in isolation by council officials.",
+         None, "Supportive", source_map.get("Minutes of Full Council Meeting — March 2025")),
+        (councillor_map["Margaret McDonnell"], motion_map["Motion to develop a climate action plan for Cork City"],
+         "Expressed support in principle but asked about the cost implications and whether additional central government funding would be sought.",
+         None, "Neutral", source_map.get("Minutes of Full Council Meeting — March 2025")),
+        (councillor_map["Kenneth O'Flynn"], motion_map["Motion to develop a climate action plan for Cork City"],
+         "Argued that any climate plan must balance environmental goals with the economic needs of local businesses and avoid excessive regulation.",
+         None, "Critical", source_map.get("Minutes of Full Council Meeting — March 2025")),
+    ]
+
+    for cid, mid, summary, quote, sentiment, sid in statements_data:
+        conn.execute(
+            """INSERT INTO motion_statements
+               (councillor_id, motion_id, summary, quote, sentiment, source_id)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (cid, mid, summary, quote, sentiment, sid),
+        )
+    conn.commit()
+
 
 def main():
     """Run the full seed process."""

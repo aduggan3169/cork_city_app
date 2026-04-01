@@ -112,6 +112,23 @@ CREATE TABLE IF NOT EXISTS positions (
 );
 
 -- ============================================================
+-- COUNCILLOR STATEMENTS PER MOTION (extracted from minutes)
+-- ============================================================
+
+-- What a councillor said during debate on a specific motion.
+-- Source is typically council minutes. Multiple talking points per councillor per motion.
+CREATE TABLE IF NOT EXISTS motion_statements (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    councillor_id   INTEGER NOT NULL REFERENCES councillors(id),
+    motion_id       INTEGER NOT NULL REFERENCES motions(id),
+    summary         TEXT NOT NULL,  -- one key talking point
+    quote           TEXT,           -- direct quote from minutes if available
+    sentiment       TEXT CHECK(sentiment IN ('Supportive', 'Critical', 'Neutral', 'Procedural')),
+    source_id       INTEGER REFERENCES sources(id),
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ============================================================
 -- PROVENANCE
 -- ============================================================
 
@@ -152,3 +169,5 @@ CREATE INDEX IF NOT EXISTS idx_positions_issue ON positions(issue_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_councillor ON attendance(councillor_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_meeting ON attendance(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_issues_parent ON issues(parent_id);
+CREATE INDEX IF NOT EXISTS idx_motion_statements_councillor ON motion_statements(councillor_id);
+CREATE INDEX IF NOT EXISTS idx_motion_statements_motion ON motion_statements(motion_id);

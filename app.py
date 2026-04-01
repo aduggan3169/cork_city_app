@@ -164,6 +164,22 @@ def load_motion_issues():
     """)
 
 
+@st.cache_data(ttl=300)
+def load_motion_statements():
+    return query("""
+        SELECT ms.id, ms.councillor_id, ms.motion_id,
+               ms.summary, ms.quote, ms.sentiment,
+               c.first_name || ' ' || c.last_name AS councillor_name,
+               p.name AS party, p.short_name AS party_short, p.colour AS party_colour,
+               w.name AS ward
+        FROM motion_statements ms
+        JOIN councillors c ON ms.councillor_id = c.id
+        JOIN parties p ON c.party_id = p.id
+        JOIN wards w ON c.ward_id = w.id
+        ORDER BY p.name, c.last_name
+    """)
+
+
 # ---------------------------------------------------------------------------
 # Party colour map
 # ---------------------------------------------------------------------------
@@ -450,17 +466,69 @@ def page_councillors():
 # ---------------------------------------------------------------------------
 # PAGE: Motions & Votes
 # ---------------------------------------------------------------------------
+
+# Consistent colour maps used across the motions page
+VOTE_COLOURS = {
+    "For": "#4CAF50",
+    "Against": "#F44336",
+    "Abstained": "#FF9800",
+    "Absent": "#9E9E9E",
+}
+
+VOTE_ICONS = {
+    "For": "🟢",
+    "Against": "🔴",
+    "Abstained": "🟡",
+    "Absent": "⚪",
+}
+
+SENTIMENT_ICONS = {
+    "Supportive": "👍",
+    "Critical": "👎",
+    "Neutral": "➖",
+    "Procedural": "📋",
+}
+
+
+def _render_councillor_card(councillor_name, vote, statements, party_colour):
+    """Render a single councillor's vote + statements within a party tab."""
+    vote_icon = VOTE_ICONS.get(vote, "⚪")
+    st.markdown(
+        f'{vote_icon} **{councillor_name}** — voted _{vote}_'
+    )
+
+    if len(statements) > 0:
+        for _, stmt in statements.iterrows():
+            sent_icon = SENTIMENT_ICONS.get(stmt["sentiment"], "")
+            st.markdown(f"&emsp;{sent_icon} {stmt['summary']}")
+            if pd.notna(stmt["quote"]) and stmt["quote"]:
+                st.markdown(f'&emsp;&emsp;*"{stmt["quote"]}"*')
+    else:
+        st.caption("&emsp;No recorded statements on this motion.")
+
+
 def page_motions():
     st.title("Motions & Votes")
 
     df_m = load_motions()
     df_v = load_votes()
     df_mi = load_motion_issues()
-    colours = get_party_colours(load_councillors())
+    df_ms = load_motion_statements()
+    df_c = load_councillors()
+    colours = get_party_colours(df_c)
+
+    # Determine party display order (by seat count descending)
+    party_order = (
+        df_c.groupby("party_short")
+        .size()
+        .reset_index(name="count")
+        .sort_values("count", ascending=False)["party_short"]
+        .tolist()
+    )
 
     # --- Motion list ---
-    for _, motion in df_m.iterrows():
-        outcome_colour = {
+    for idx, motion in df_m.iterrows():
+        outcome_icon = {
             "Passed": "🟢",
             "Failed": "🔴",
             "Deferred": "🟡",
@@ -469,8 +537,9 @@ def page_motions():
         }.get(motion["outcome"], "⚪")
 
         with st.expander(
-            f"{outcome_colour} {motion['title']}  —  {motion['meeting_date']}"
+            f"{outcome_icon} {motion['title']}  —  {motion['meeting_date']}"
         ):
+            # --- Motion header ---
             st.markdown(f"**{motion['outcome']}** · {motion['meeting_type']}")
             st.markdown(motion["description"])
 
@@ -488,34 +557,28 @@ def page_motions():
                 tags = ", ".join(motion_issues["issue_name"].tolist())
                 st.caption(f"Issues: {tags}")
 
-            # Vote breakdown
+            st.markdown("---")
+
+            # --- Vote summary metrics ---
             m_votes = df_v[df_v["motion_id"] == motion["id"]]
             if len(m_votes) > 0:
-                st.markdown("**Vote Breakdown**")
-
                 vote_summary = m_votes["vote"].value_counts()
                 cols = st.columns(4)
                 for i, v in enumerate(["For", "Against", "Abstained", "Absent"]):
                     cols[i].metric(v, vote_summary.get(v, 0))
 
-                # Party-level breakdown
+                # Party-level vote chart
                 party_votes = (
                     m_votes.groupby(["party_short", "vote"])
                     .size()
                     .reset_index(name="count")
                 )
-                vote_colours = {
-                    "For": "#4CAF50",
-                    "Against": "#F44336",
-                    "Abstained": "#FF9800",
-                    "Absent": "#9E9E9E",
-                }
                 fig = px.bar(
                     party_votes,
                     x="party_short",
                     y="count",
                     color="vote",
-                    color_discrete_map=vote_colours,
+                    color_discrete_map=VOTE_COLOURS,
                     barmode="stack",
                     labels={
                         "party_short": "Party",
@@ -527,6 +590,38 @@ def page_motions():
                     height=250, margin=dict(l=0, r=0, t=10, b=0)
                 )
                 st.plotly_chart(fig, use_container_width=True)
+
+            st.markdown("---")
+
+            # --- Party tabs with councillor statements ---
+            st.markdown("**Councillor Statements by Party**")
+
+            m_statements = df_ms[df_ms["motion_id"] == motion["id"]]
+
+            # Only show tabs for parties that have councillors who voted on this motion
+            motion_parties = [p for p in party_order if p in m_votes["party_short"].values]
+
+            if motion_parties:
+                tabs = st.tabs(motion_parties)
+
+                for tab, party_short in zip(tabs, motion_parties):
+                    with tab:
+                        # Get all councillors from this party who voted on this motion
+                        party_votes_df = m_votes[m_votes["party_short"] == party_short].sort_values("councillor_name")
+
+                        for _, voter in party_votes_df.iterrows():
+                            # Get statements for this councillor on this motion
+                            c_statements = m_statements[
+                                m_statements["councillor_id"] == voter["councillor_id"]
+                            ]
+
+                            _render_councillor_card(
+                                voter["councillor_name"],
+                                voter["vote"],
+                                c_statements,
+                                voter["party_colour"],
+                            )
+                            st.markdown("")  # spacing between councillors
 
 
 # ---------------------------------------------------------------------------
