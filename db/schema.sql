@@ -129,6 +129,31 @@ CREATE TABLE IF NOT EXISTS motion_statements (
 );
 
 -- ============================================================
+-- DECLARATIONS / REGISTER OF INTERESTS
+-- ============================================================
+
+-- Under the Ethics in Public Office Act, councillors must declare
+-- financial and other interests. Tracking changes over time surfaces
+-- potential conflicts between declared interests and voting behaviour.
+
+CREATE TABLE IF NOT EXISTS declaration_categories (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL UNIQUE,
+    description TEXT
+);
+
+CREATE TABLE IF NOT EXISTS declarations (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    councillor_id   INTEGER NOT NULL REFERENCES councillors(id),
+    category_id     INTEGER NOT NULL REFERENCES declaration_categories(id),
+    description     TEXT NOT NULL,
+    date_declared   TEXT NOT NULL,  -- ISO 8601 date
+    date_withdrawn  TEXT,           -- NULL = still active
+    notes           TEXT,           -- e.g. "updated from previous declaration"
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ============================================================
 -- PROVENANCE
 -- ============================================================
 
@@ -171,3 +196,5 @@ CREATE INDEX IF NOT EXISTS idx_attendance_meeting ON attendance(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_issues_parent ON issues(parent_id);
 CREATE INDEX IF NOT EXISTS idx_motion_statements_councillor ON motion_statements(councillor_id);
 CREATE INDEX IF NOT EXISTS idx_motion_statements_motion ON motion_statements(motion_id);
+CREATE INDEX IF NOT EXISTS idx_declarations_councillor ON declarations(councillor_id);
+CREATE INDEX IF NOT EXISTS idx_declarations_category ON declarations(category_id);

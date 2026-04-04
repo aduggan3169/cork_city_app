@@ -32,7 +32,7 @@ DEBUG = True
 # ---------------------------------------------------------------------------
 
 # Required tables — add new table names here when extending the schema
-REQUIRED_TABLES = ["councillors", "motions", "votes", "motion_statements"]
+REQUIRED_TABLES = ["councillors", "motions", "votes", "motion_statements", "declarations"]
 
 # Locally: DB lives in db/. On Streamlit Cloud (or any read-only fs): use /tmp/.
 if os.access(DB_DIR, os.W_OK):
@@ -231,6 +231,19 @@ def load_position_sources():
         FROM position_sources ps
         JOIN sources s ON ps.source_id = s.id
         ORDER BY s.date DESC
+    """)
+
+
+@st.cache_data(ttl=300)
+def load_declarations():
+    """Load councillor declarations with category names."""
+    return query("""
+        SELECT d.id, d.councillor_id, d.description, d.date_declared,
+               d.date_withdrawn, d.notes,
+               dc.name AS category
+        FROM declarations d
+        JOIN declaration_categories dc ON d.category_id = dc.id
+        ORDER BY dc.name, d.date_declared DESC
     """)
 
 
@@ -659,6 +672,7 @@ def page_councillors():
     df_mi = load_motion_issues()
     df_issues = load_issues()
     df_psrc = load_position_sources()
+    df_decl = load_declarations()
     colours = get_party_colours(df_c)
 
     # --- Filters ---
@@ -822,6 +836,71 @@ def page_councillors():
         "Alignment shows whether votes match public statements."
     )
     _render_policy_stance_cards(cid, df_pos, df_v, df_mi, df_issues, df_psrc)
+
+    # --- Register of Interests ---
+    st.subheader("Register of Interests")
+    st.caption(
+        "Declared under the Ethics in Public Office Act. "
+        "Active and withdrawn declarations are shown."
+    )
+    c_decl = df_decl[df_decl["councillor_id"] == cid]
+
+    if len(c_decl) == 0:
+        st.info("No declarations on record for this councillor.")
+    else:
+        CATEGORY_ICONS = {
+            "Land & Property": "🏠",
+            "Employment & Occupation": "💼",
+            "Directorships": "🏢",
+            "Shares & Financial Interests": "📈",
+            "Contracts with Council": "📝",
+            "Gifts & Hospitality": "🎁",
+            "Membership of Bodies": "🤝",
+            "Consultancy & Advisory": "🔧",
+        }
+
+        active = c_decl[c_decl["date_withdrawn"].isna()]
+        withdrawn = c_decl[c_decl["date_withdrawn"].notna()]
+
+        # Summary counts by category
+        cat_counts = active.groupby("category").size().reset_index(name="count")
+        summary_parts = []
+        for _, row in cat_counts.iterrows():
+            icon = CATEGORY_ICONS.get(row["category"], "📄")
+            summary_parts.append(f"{icon} {row['category']}: {row['count']}")
+        if summary_parts:
+            st.markdown(" · ".join(summary_parts))
+
+        # Active declarations grouped by category
+        for category in active["category"].unique():
+            cat_decls = active[active["category"] == category]
+            icon = CATEGORY_ICONS.get(category, "📄")
+
+            with st.expander(
+                f"{icon} {category} ({len(cat_decls)})", expanded=False
+            ):
+                for _, decl in cat_decls.iterrows():
+                    st.markdown(f"**{decl['description']}**")
+                    caption_parts = [f"Declared: {decl['date_declared']}"]
+                    if pd.notna(decl["notes"]) and decl["notes"]:
+                        caption_parts.append(decl["notes"])
+                    st.caption(" · ".join(caption_parts))
+
+        # Withdrawn declarations
+        if len(withdrawn) > 0:
+            with st.expander(
+                f"Withdrawn declarations ({len(withdrawn)})", expanded=False
+            ):
+                for _, decl in withdrawn.iterrows():
+                    icon = CATEGORY_ICONS.get(decl["category"], "📄")
+                    st.markdown(
+                        f"~~{icon} {decl['category']}: {decl['description']}~~"
+                    )
+                    st.caption(
+                        f"Declared: {decl['date_declared']} · "
+                        f"Withdrawn: {decl['date_withdrawn']}"
+                        + (f" · {decl['notes']}" if pd.notna(decl["notes"]) else "")
+                    )
 
 
 # ---------------------------------------------------------------------------
