@@ -224,6 +224,17 @@ def load_issues():
 
 
 @st.cache_data(ttl=300)
+def load_position_sources():
+    """Load sources linked to positions via position_sources join table."""
+    return query("""
+        SELECT ps.position_id, s.title, s.url, s.source_type, s.date
+        FROM position_sources ps
+        JOIN sources s ON ps.source_id = s.id
+        ORDER BY s.date DESC
+    """)
+
+
+@st.cache_data(ttl=300)
 def load_motion_statements():
     return query("""
         SELECT ms.id, ms.councillor_id, ms.motion_id,
@@ -526,7 +537,17 @@ def _compute_alignment(stance, vote_counts, total):
 STANCE_ICONS = {"Support": "🟢", "Oppose": "🔴", "Neutral": "⚪", "Mixed": "🟡"}
 
 
-def _render_policy_stance_cards(cid, df_pos, df_v, df_mi, df_issues):
+SOURCE_TYPE_ICONS = {
+    "News": "📰",
+    "Minutes": "📋",
+    "Press Release": "📢",
+    "Social Media": "💬",
+    "Interview": "🎙️",
+    "Other": "📄",
+}
+
+
+def _render_policy_stance_cards(cid, df_pos, df_v, df_mi, df_issues, df_psrc):
     """Render policy stance summary cards for a councillor."""
     c_positions = df_pos[df_pos["councillor_id"] == cid]
 
@@ -556,6 +577,9 @@ def _render_policy_stance_cards(cid, df_pos, df_v, df_mi, df_issues):
             pos["stance"], vote_counts, total
         )
 
+        # Sources linked to this position
+        pos_sources = df_psrc[df_psrc["position_id"] == pos["id"]]
+
         with st.container(border=True):
             # Header row: issue + stance
             hcol1, hcol2 = st.columns([3, 1])
@@ -571,8 +595,29 @@ def _render_policy_stance_cards(cid, df_pos, df_v, df_mi, df_issues):
                     unsafe_allow_html=True,
                 )
 
-            # Position summary
+            # Position summary + quote if available
             st.markdown(f"> {pos['summary']}")
+            if pd.notna(pos.get("quote")) and pos["quote"]:
+                st.markdown(f'> *"{pos["quote"]}"*')
+
+            # Media sources
+            if len(pos_sources) > 0:
+                src_parts = []
+                for _, src in pos_sources.iterrows():
+                    icon = SOURCE_TYPE_ICONS.get(src["source_type"], "📄")
+                    if pd.notna(src["url"]) and src["url"]:
+                        src_parts.append(
+                            f'{icon} [{src["title"]}]({src["url"]}) '
+                            f'— {src["source_type"]}, {src["date"]}'
+                        )
+                    else:
+                        src_parts.append(
+                            f'{icon} {src["title"]} '
+                            f'— {src["source_type"]}, {src["date"]}'
+                        )
+                with st.expander(f"Sources ({len(pos_sources)})"):
+                    for part in src_parts:
+                        st.markdown(part)
 
             if total > 0:
                 # Vote summary
@@ -613,6 +658,7 @@ def page_councillors():
     df_pos = load_positions()
     df_mi = load_motion_issues()
     df_issues = load_issues()
+    df_psrc = load_position_sources()
     colours = get_party_colours(df_c)
 
     # --- Filters ---
@@ -724,7 +770,7 @@ def page_councillors():
         "Stated positions cross-referenced with voting record on related motions. "
         "Alignment shows whether votes match public statements."
     )
-    _render_policy_stance_cards(cid, df_pos, df_v, df_mi, df_issues)
+    _render_policy_stance_cards(cid, df_pos, df_v, df_mi, df_issues, df_psrc)
 
 
 # ---------------------------------------------------------------------------

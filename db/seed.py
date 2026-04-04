@@ -495,20 +495,97 @@ def seed_sample_data(conn, councillor_map, issue_map):
             )
     conn.commit()
 
+    # Build position lookup: (councillor_name, issue_name) → position_id
+    pos_rows = conn.execute("""
+        SELECT p.id, c.first_name || ' ' || c.last_name, i.name
+        FROM positions p
+        JOIN councillors c ON p.councillor_id = c.id
+        JOIN issues i ON p.issue_id = i.id
+    """).fetchall()
+    pos_map = {(name, issue): pid for pid, name, issue in pos_rows}
+
     # --- Sources ---
     sources_data = [
+        # News articles — plausible Cork local media URLs
         (
-            "https://www.echolive.ie/example/housing-emergency-2025",
+            "https://www.echolive.ie/corknews/cork-councillors-declare-housing-emergency-2025",
             "Cork councillors declare housing emergency",
             "News",
             "2025-01-14",
         ),
         (
-            "https://www.irishexaminer.com/example/30kmh-zone",
+            "https://www.irishexaminer.com/news/munster/cork-30kmh-zones-to-expand-across-city",
             "30km/h zones to expand across Cork city",
             "News",
             "2025-01-14",
         ),
+        (
+            "https://www.echolive.ie/corknews/kerins-calls-for-housing-first-approach-in-cork",
+            "SF councillor calls for Housing First approach in Cork",
+            "News",
+            "2025-02-19",
+        ),
+        (
+            "https://www.irishexaminer.com/news/munster/cork-ring-road-debate-splits-council",
+            "Cork Northern Ring Road debate splits council chamber",
+            "News",
+            "2025-02-11",
+        ),
+        (
+            "https://www.echolive.ie/corknews/vacant-property-levy-cork-council-debate",
+            "Vacant property levy debate heats up at Cork City Council",
+            "News",
+            "2025-03-11",
+        ),
+        (
+            "https://www.echolive.ie/corknews/moran-champions-western-road-cycle-lane",
+            "Green councillor champions Western Road cycle lane pilot",
+            "News",
+            "2025-02-18",
+        ),
+        (
+            "https://www.irishexaminer.com/news/munster/cork-climate-action-plan-binding-targets-proposed",
+            "Cork councillors push for binding climate targets",
+            "News",
+            "2025-03-11",
+        ),
+        (
+            "https://www.echolive.ie/corknews/community-centres-funding-boost-cork-northside",
+            "Northside community centres in line for 20% funding boost",
+            "News",
+            "2025-02-11",
+        ),
+        (
+            "https://www.corkbeo.ie/news/local-news/oflynn-backs-vacant-levy-shorter-threshold",
+            "O'Flynn backs vacant levy but wants shorter threshold",
+            "News",
+            "2025-02-06",
+        ),
+        (
+            "https://www.irishexaminer.com/news/munster/cork-councillor-cahill-parking-cycle-lane-concerns",
+            "Cahill raises parking concerns over cycle lane plans",
+            "News",
+            "2025-03-02",
+        ),
+        (
+            "https://www.echolive.ie/corknews/harmon-pushes-for-mental-health-funding-cork",
+            "Labour councillor pushes for youth mental health funding",
+            "News",
+            "2025-03-11",
+        ),
+        (
+            "https://www.irishexaminer.com/news/munster/boylan-climate-versus-economy-cork-council",
+            "Boylan warns against prioritising climate over economic growth",
+            "News",
+            "2025-03-16",
+        ),
+        (
+            "https://www.echolive.ie/corknews/mccarthy-ban-investment-fund-purchases-cork",
+            "PBP councillor calls for ban on fund purchases of Cork homes",
+            "News",
+            "2025-02-21",
+        ),
+        # Council minutes
         (
             None,
             "Minutes of Full Council Meeting — January 2025",
@@ -527,6 +604,19 @@ def seed_sample_data(conn, councillor_map, issue_map):
             "Minutes",
             "2025-03-10",
         ),
+        # Press releases
+        (
+            "https://www.greenparty.ie/cork-climate-action-plan-proposal",
+            "Green Party Cork: Climate Action Plan Proposal",
+            "Press Release",
+            "2025-03-09",
+        ),
+        (
+            "https://www.sinnfein.ie/cork-housing-emergency-motion",
+            "Sinn Féin Cork: Housing Emergency Motion",
+            "Press Release",
+            "2025-01-12",
+        ),
     ]
 
     for url, title, stype, date in sources_data:
@@ -536,9 +626,99 @@ def seed_sample_data(conn, councillor_map, issue_map):
         )
     conn.commit()
 
-    # Get source IDs for linking statements to minutes
-    source_rows = conn.execute("SELECT id, title FROM sources WHERE source_type = 'Minutes'").fetchall()
+    # Build full source lookup
+    source_rows = conn.execute("SELECT id, title FROM sources").fetchall()
     source_map = {title: sid for sid, title in source_rows}
+
+    # --- Position ↔ Source links ---
+    # Maps (councillor_name, issue_name) → list of source titles
+    position_source_links = [
+        # Fiona Kerins — Social Housing
+        ("Fiona Kerins", "Social Housing", [
+            "Cork councillors declare housing emergency",
+            "Sinn Féin Cork: Housing Emergency Motion",
+            "Minutes of Full Council Meeting — January 2025",
+        ]),
+        # Fiona Kerins — Homelessness
+        ("Fiona Kerins", "Homelessness", [
+            "SF councillor calls for Housing First approach in Cork",
+        ]),
+        # Dan Boyle — Climate Action
+        ("Dan Boyle", "Climate Action", [
+            "Cork councillors push for binding climate targets",
+            "Green Party Cork: Climate Action Plan Proposal",
+            "Minutes of Full Council Meeting — March 2025",
+        ]),
+        # Kenneth O'Flynn — Vacant Properties
+        ("Kenneth O'Flynn", "Vacant Properties", [
+            "O'Flynn backs vacant levy but wants shorter threshold",
+        ]),
+        # Oliver Moran — Cycling Infrastructure
+        ("Oliver Moran", "Cycling Infrastructure", [
+            "Green councillor champions Western Road cycle lane pilot",
+            "30km/h zones to expand across Cork city",
+        ]),
+        # Oliver Moran — Climate Action
+        ("Oliver Moran", "Climate Action", [
+            "Cork councillors push for binding climate targets",
+            "Green Party Cork: Climate Action Plan Proposal",
+        ]),
+        # Tony Fitzgerald — Community Centres
+        ("Tony Fitzgerald", "Community Centres", [
+            "Northside community centres in line for 20% funding boost",
+            "Minutes of Full Council Meeting — February 2025",
+        ]),
+        # Brian McCarthy — Housing
+        ("Brian McCarthy", "Housing", [
+            "PBP councillor calls for ban on fund purchases of Cork homes",
+            "Cork councillors declare housing emergency",
+        ]),
+        # Brian McCarthy — Vacant Properties
+        ("Brian McCarthy", "Vacant Properties", [
+            "Vacant property levy debate heats up at Cork City Council",
+            "Minutes of Full Council Meeting — March 2025",
+        ]),
+        # Des Cahill — Transport (Mixed)
+        ("Des Cahill", "Transport", [
+            "Cahill raises parking concerns over cycle lane plans",
+            "Cork Northern Ring Road debate splits council chamber",
+        ]),
+        # Laura Harmon — Mental Health
+        ("Laura Harmon", "Mental Health", [
+            "Labour councillor pushes for youth mental health funding",
+        ]),
+        # Shane O'Callaghan — Vacant Properties (Oppose)
+        ("Shane O'Callaghan", "Vacant Properties", [
+            "Vacant property levy debate heats up at Cork City Council",
+            "Minutes of Full Council Meeting — March 2025",
+        ]),
+        # Damian Boylan — Climate Action (Mixed)
+        ("Damian Boylan", "Climate Action", [
+            "Boylan warns against prioritising climate over economic growth",
+            "Cork Northern Ring Road debate splits council chamber",
+        ]),
+        # Garrett Kelleher — Transport
+        ("Garrett Kelleher", "Transport", [
+            "Cork Northern Ring Road debate splits council chamber",
+        ]),
+        # Margaret McDonnell — Climate Action (Neutral)
+        ("Margaret McDonnell", "Climate Action", [
+            "Cork councillors push for binding climate targets",
+            "Minutes of Full Council Meeting — March 2025",
+        ]),
+    ]
+
+    for cname, issue, src_titles in position_source_links:
+        pos_key = (cname, issue)
+        if pos_key in pos_map:
+            pid = pos_map[pos_key]
+            for src_title in src_titles:
+                if src_title in source_map:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO position_sources (position_id, source_id) VALUES (?, ?)",
+                        (pid, source_map[src_title]),
+                    )
+    conn.commit()
 
     # --- Motion Statements (councillor speaking points from minutes) ---
     # Motion 1: Housing emergency declaration
