@@ -219,6 +219,11 @@ def load_motion_issues():
 
 
 @st.cache_data(ttl=300)
+def load_issues():
+    return query("SELECT id, name, parent_id FROM issues")
+
+
+@st.cache_data(ttl=300)
 def load_motion_statements():
     return query("""
         SELECT ms.id, ms.councillor_id, ms.motion_id,
@@ -467,6 +472,136 @@ def page_dashboard():
 
 
 # ---------------------------------------------------------------------------
+# POLICY STANCE HELPERS
+# ---------------------------------------------------------------------------
+
+def _get_issue_family(issue_name, df_issues):
+    """Get an issue plus its parent and children for broad motion matching."""
+    issue_row = df_issues[df_issues["name"] == issue_name]
+    if len(issue_row) == 0:
+        return {issue_name}
+
+    family = {issue_name}
+    issue_id = issue_row.iloc[0]["id"]
+
+    # Add children (sub-issues)
+    children = df_issues[df_issues["parent_id"] == issue_id]["name"].tolist()
+    family.update(children)
+
+    # Add parent (if this is a sub-issue)
+    parent_id = issue_row.iloc[0]["parent_id"]
+    if pd.notna(parent_id):
+        parent = df_issues[df_issues["id"] == parent_id]
+        if len(parent) > 0:
+            family.add(parent.iloc[0]["name"])
+
+    return family
+
+
+def _compute_alignment(stance, vote_counts, total):
+    """Compute alignment between a stated position and voting record."""
+    if total == 0:
+        return "No related votes recorded", "⚪", "#9E9E9E"
+
+    for_pct = vote_counts.get("For", 0) / total * 100
+    against_pct = vote_counts.get("Against", 0) / total * 100
+
+    if stance == "Support":
+        match_pct = for_pct
+    elif stance == "Oppose":
+        match_pct = against_pct
+    else:
+        return "Mixed/neutral stance", "🟡", "#FF9800"
+
+    if match_pct >= 75:
+        return "Votes strongly align", "✅", "#4CAF50"
+    elif match_pct >= 50:
+        return "Votes mostly align", "✅", "#8BC34A"
+    elif match_pct >= 25:
+        return "Some tension between votes and position", "⚠️", "#FF9800"
+    else:
+        return "Votes contradict stated position", "❌", "#F44336"
+
+
+STANCE_ICONS = {"Support": "🟢", "Oppose": "🔴", "Neutral": "⚪", "Mixed": "🟡"}
+
+
+def _render_policy_stance_cards(cid, df_pos, df_v, df_mi, df_issues):
+    """Render policy stance summary cards for a councillor."""
+    c_positions = df_pos[df_pos["councillor_id"] == cid]
+
+    if len(c_positions) == 0:
+        st.info("No stated positions recorded for this councillor.")
+        return
+
+    c_votes = df_v[df_v["councillor_id"] == cid]
+
+    for _, pos in c_positions.iterrows():
+        issue_name = pos["issue_name"]
+        issue_family = _get_issue_family(issue_name, df_issues)
+
+        # Find motions tagged with any issue in the family
+        related_motion_ids = df_mi[
+            df_mi["issue_name"].isin(issue_family)
+        ]["motion_id"].unique()
+
+        # This councillor's votes on those motions
+        issue_votes = c_votes[c_votes["motion_id"].isin(related_motion_ids)]
+        total = len(issue_votes)
+        vote_counts = (
+            issue_votes["vote"].value_counts().to_dict() if total > 0 else {}
+        )
+
+        alignment_label, alignment_icon, alignment_colour = _compute_alignment(
+            pos["stance"], vote_counts, total
+        )
+
+        with st.container(border=True):
+            # Header row: issue + stance
+            hcol1, hcol2 = st.columns([3, 1])
+            with hcol1:
+                st.markdown(
+                    f"**{issue_name}** — "
+                    f"{STANCE_ICONS.get(pos['stance'], '⚪')} {pos['stance']}"
+                )
+            with hcol2:
+                st.markdown(
+                    f'<span style="color:{alignment_colour};font-weight:600;">'
+                    f"{alignment_icon} {alignment_label}</span>",
+                    unsafe_allow_html=True,
+                )
+
+            # Position summary
+            st.markdown(f"> {pos['summary']}")
+
+            if total > 0:
+                # Vote summary
+                vote_parts = []
+                for v in ["For", "Against", "Abstained", "Absent"]:
+                    c = vote_counts.get(v, 0)
+                    if c > 0:
+                        vote_parts.append(f"{v}: {c}")
+
+                st.markdown(
+                    f"**{total} related motion{'s' if total != 1 else ''}** "
+                    f"— {' · '.join(vote_parts)}"
+                )
+
+                # Motion-level detail
+                with st.expander("View related motions"):
+                    for _, vr in issue_votes.sort_values(
+                        "meeting_date", ascending=False
+                    ).iterrows():
+                        v_icon = VOTE_ICONS.get(vr["vote"], "⚪")
+                        st.markdown(
+                            f"{v_icon} **{vr['motion_title']}** "
+                            f"— voted _{vr['vote']}_ ({vr['meeting_date']})"
+                        )
+            else:
+                st.caption("No related motions voted on yet.")
+
+
+# ---------------------------------------------------------------------------
 # PAGE: Councillors
 # ---------------------------------------------------------------------------
 def page_councillors():
@@ -476,6 +611,8 @@ def page_councillors():
     df_v = load_votes()
     df_a = load_attendance()
     df_pos = load_positions()
+    df_mi = load_motion_issues()
+    df_issues = load_issues()
     colours = get_party_colours(df_c)
 
     # --- Filters ---
@@ -581,25 +718,13 @@ def page_councillors():
     else:
         st.info("No votes recorded for this councillor.")
 
-    # --- Stated Positions ---
-    st.subheader("Stated Positions")
-    c_positions = df_pos[df_pos["councillor_id"] == cid]
-    if len(c_positions) > 0:
-        for _, pos in c_positions.iterrows():
-            stance_icon = {
-                "Support": "🟢",
-                "Oppose": "🔴",
-                "Neutral": "⚪",
-                "Mixed": "🟡",
-            }.get(pos["stance"], "⚪")
-
-            st.markdown(
-                f"**{stance_icon} {pos['issue_name']}** — _{pos['stance']}_"
-            )
-            st.markdown(f"> {pos['summary']}")
-            st.caption(f"Date: {pos['date']}")
-    else:
-        st.info("No stated positions recorded for this councillor.")
+    # --- Policy Stances ---
+    st.subheader("Policy Stances")
+    st.caption(
+        "Stated positions cross-referenced with voting record on related motions. "
+        "Alignment shows whether votes match public statements."
+    )
+    _render_policy_stance_cards(cid, df_pos, df_v, df_mi, df_issues)
 
 
 # ---------------------------------------------------------------------------

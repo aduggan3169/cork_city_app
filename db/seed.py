@@ -427,6 +427,63 @@ def seed_sample_data(conn, councillor_map, issue_map):
             "Pushes for dedicated mental health services funding at council level, particularly for young people.",
             "2025-03-10",
         ),
+        # --- Additional positions for richer policy stance cards ---
+        (
+            "Joe Kavanagh",
+            "Social Housing",
+            "Mixed",
+            "Supports housing development in principle but concerned that emergency declarations and public-only approaches could deter private sector investment.",
+            "2025-01-20",
+        ),
+        (
+            "Shane O'Callaghan",
+            "Vacant Properties",
+            "Oppose",
+            "Argues the proposed vacant property levy is premature and could penalise owners undertaking genuine renovation work.",
+            "2025-03-12",
+        ),
+        (
+            "Damian Boylan",
+            "Climate Action",
+            "Mixed",
+            "Acknowledges climate concerns but prioritises economic growth and infrastructure investment, including the Northern Ring Road.",
+            "2025-03-15",
+        ),
+        (
+            "Garrett Kelleher",
+            "Transport",
+            "Support",
+            "Advocates for major road infrastructure including the Northern Ring Road to improve northside connectivity and economic development.",
+            "2025-02-15",
+        ),
+        (
+            "Margaret McDonnell",
+            "Climate Action",
+            "Neutral",
+            "Supports climate action in principle but consistently questions cost implications and whether adequate central government funding will follow.",
+            "2025-03-10",
+        ),
+        (
+            "Fiona Kerins",
+            "Homelessness",
+            "Support",
+            "Calls for emergency accommodation capacity to be doubled and for a Housing First approach to be adopted city-wide.",
+            "2025-02-18",
+        ),
+        (
+            "Oliver Moran",
+            "Climate Action",
+            "Support",
+            "Frames climate action as inseparable from transport policy, arguing Cork must invest in cycling and public transport over road expansion.",
+            "2025-03-08",
+        ),
+        (
+            "Brian McCarthy",
+            "Vacant Properties",
+            "Support",
+            "Argues the vacant property levy threshold should be 6 months, not 12, and revenue should be ring-fenced for social housing.",
+            "2025-03-05",
+        ),
     ]
 
     for cname, issue, stance, summary, date in positions_data:
