@@ -707,27 +707,78 @@ def page_councillors():
         )
         st.markdown(f"**Ward:** {councillor['ward']}")
 
+    # --- Council-wide averages for comparison ---
+    avg_attendance = (
+        df_a.groupby("councillor_id")["present"].mean().mean() * 100
+    )
+    # Participation rate: votes cast (excluding Absent) / total votes
+    total_votes_per_councillor = df_v.groupby("councillor_id").size()
+    active_votes_per_councillor = (
+        df_v[df_v["vote"] != "Absent"].groupby("councillor_id").size()
+    )
+    avg_participation = (
+        (active_votes_per_councillor / total_votes_per_councillor).mean() * 100
+    )
+
     # Attendance stats
     c_attendance = df_a[df_a["councillor_id"] == cid]
     if len(c_attendance) > 0:
         att_rate = c_attendance["present"].mean() * 100
-        meetings_attended = c_attendance["present"].sum()
+        meetings_attended = int(c_attendance["present"].sum())
         total_meetings = len(c_attendance)
     else:
         att_rate = 0
         meetings_attended = 0
         total_meetings = 0
 
+    att_diff = att_rate - avg_attendance
+
     with col2:
         st.metric("Attendance Rate", f"{att_rate:.0f}%")
+        if att_diff > 2:
+            st.markdown(
+                f'<span style="color:#4CAF50;font-size:0.85em;">▲ {abs(att_diff):.0f}pp above council average ({avg_attendance:.0f}%)</span>',
+                unsafe_allow_html=True,
+            )
+        elif att_diff < -2:
+            st.markdown(
+                f'<span style="color:#F44336;font-size:0.85em;">▼ {abs(att_diff):.0f}pp below council average ({avg_attendance:.0f}%)</span>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f'<span style="color:#9E9E9E;font-size:0.85em;">● At council average ({avg_attendance:.0f}%)</span>',
+                unsafe_allow_html=True,
+            )
         st.caption(f"{meetings_attended}/{total_meetings} meetings")
 
-    # Vote breakdown
+    # Vote breakdown + participation badge
     c_votes = df_v[df_v["councillor_id"] == cid]
     with col3:
         if len(c_votes) > 0:
             vote_counts = c_votes["vote"].value_counts()
+            active_count = len(c_votes[c_votes["vote"] != "Absent"])
+            participation_rate = active_count / len(c_votes) * 100
+            part_diff = participation_rate - avg_participation
+
             st.metric("Votes Cast", len(c_votes))
+
+            if part_diff > 2:
+                st.markdown(
+                    f'<span style="color:#4CAF50;font-size:0.85em;">▲ {participation_rate:.0f}% participation — {abs(part_diff):.0f}pp above avg</span>',
+                    unsafe_allow_html=True,
+                )
+            elif part_diff < -2:
+                st.markdown(
+                    f'<span style="color:#F44336;font-size:0.85em;">▼ {participation_rate:.0f}% participation — {abs(part_diff):.0f}pp below avg</span>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<span style="color:#9E9E9E;font-size:0.85em;">● {participation_rate:.0f}% participation — at council average</span>',
+                    unsafe_allow_html=True,
+                )
+
             parts = []
             for v in ["For", "Against", "Abstained", "Absent"]:
                 count = vote_counts.get(v, 0)
