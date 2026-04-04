@@ -504,6 +504,143 @@ def seed_sample_data(conn, councillor_map, issue_map):
     """).fetchall()
     pos_map = {(name, issue): pid for pid, name, issue in pos_rows}
 
+    # --- Declaration Categories (Ethics in Public Office Act) ---
+    decl_categories = [
+        ("Land & Property", "Ownership or interest in land or property within the council's functional area"),
+        ("Employment & Occupation", "Paid employment, trade, profession, or vocation"),
+        ("Directorships", "Directorships of companies or other bodies corporate"),
+        ("Shares & Financial Interests", "Shares or other financial interests in companies"),
+        ("Contracts with Council", "Contracts with the local authority for supply of goods or services"),
+        ("Gifts & Hospitality", "Gifts, property, or hospitality received in connection with membership of the council"),
+        ("Membership of Bodies", "Membership of organisations that could reasonably be seen to influence actions as a councillor"),
+        ("Consultancy & Advisory", "Consultancy, advisory, or professional services provided"),
+    ]
+
+    for name, desc in decl_categories:
+        conn.execute(
+            "INSERT OR IGNORE INTO declaration_categories (name, description) VALUES (?, ?)",
+            (name, desc),
+        )
+    conn.commit()
+
+    cat_rows = conn.execute("SELECT id, name FROM declaration_categories").fetchall()
+    cat_map = {name: cid for cid, name in cat_rows}
+
+    # --- Declarations ---
+    # Realistic declarations that create interesting potential conflicts with
+    # voting behaviour. Format: (councillor, category, description, date_declared, date_withdrawn, notes)
+    declarations_data = [
+        # Property interests — potentially relevant to housing/planning votes
+        ("Kenneth O'Flynn", "Land & Property",
+         "Residential rental property portfolio (3 units), Cork City North East",
+         "2024-07-01", None, None),
+        ("Des Cahill", "Land & Property",
+         "Commercial premises, Douglas Street, Cork",
+         "2024-07-01", None, None),
+        ("Fergal Dennehy", "Land & Property",
+         "Development land (1.2 acres), Curraheen Road, Cork",
+         "2024-07-01", None, None),
+        ("Mary Rose Desmond", "Land & Property",
+         "Residential property, Rochestown, Cork",
+         "2024-07-01", None, None),
+        ("Colm Kelleher", "Land & Property",
+         "Agricultural land (15 acres), Ballincollig area",
+         "2024-07-01", None, None),
+        ("Terry Shannon", "Land & Property",
+         "Residential rental property (1 unit), Blackrock, Cork",
+         "2024-07-01", None, None),
+        ("Shane O'Callaghan", "Land & Property",
+         "Two residential investment properties, Cork city centre",
+         "2024-07-01", None,
+         "Updated: originally declared one property (2024-07-01), added second property"),
+        # Employment
+        ("Joe Kavanagh", "Employment & Occupation",
+         "Director, Kavanagh & Associates (property management consultancy)",
+         "2024-07-01", None, None),
+        ("Damian Boylan", "Employment & Occupation",
+         "Senior Engineer, BAM Construction (civil engineering firm)",
+         "2024-07-01", None, None),
+        ("Des Cahill", "Employment & Occupation",
+         "Solicitor, Cahill & Partners, Douglas Street, Cork",
+         "2024-07-01", None, None),
+        ("Garrett Kelleher", "Employment & Occupation",
+         "Transport logistics manager, Kelleher Haulage Ltd",
+         "2024-07-01", None, None),
+        ("Laura Harmon", "Employment & Occupation",
+         "Policy officer, National Women's Council of Ireland (until 2024)",
+         "2024-07-01", "2024-11-30", "Resigned position upon election"),
+        ("Pádraig Rice", "Employment & Occupation",
+         "Community development worker, Cork Social Enterprise Network",
+         "2024-07-01", None, None),
+        # Directorships
+        ("Kenneth O'Flynn", "Directorships",
+         "Director, O'Flynn Property Management Ltd",
+         "2024-07-01", None, None),
+        ("Tony Fitzgerald", "Directorships",
+         "Director, Northside Community Enterprises CLG (voluntary)",
+         "2024-07-01", None, None),
+        ("Fergal Dennehy", "Directorships",
+         "Director, Cork Docklands Development Forum CLG",
+         "2024-07-01", None, None),
+        ("Damian Boylan", "Directorships",
+         "Non-executive director, Cork Chamber of Commerce",
+         "2024-09-15", None, "Appointed post-election"),
+        # Shares & Financial Interests
+        ("Joe Kavanagh", "Shares & Financial Interests",
+         "Shareholding in Kavanagh & Associates Ltd (>25%)",
+         "2024-07-01", None, None),
+        ("Shane O'Callaghan", "Shares & Financial Interests",
+         "Shareholding in O'Callaghan Developments Ltd (family company, <5%)",
+         "2024-07-01", None, None),
+        # Contracts with Council
+        ("Garrett Kelleher", "Contracts with Council",
+         "Kelleher Haulage Ltd: waste collection sub-contract via Cork City Council tender (2023–2025)",
+         "2024-07-01", None, None),
+        # Gifts & Hospitality
+        ("Kenneth O'Flynn", "Gifts & Hospitality",
+         "Attendance at Irish Property Industry Awards dinner (table hosted by CBRE Ireland), Nov 2024",
+         "2024-12-01", None, None),
+        ("Damian Boylan", "Gifts & Hospitality",
+         "Attendance at Cork Chamber Annual Dinner (table hosted by Cork Chamber), Oct 2024",
+         "2024-11-01", None, None),
+        # Membership of Bodies
+        ("Dan Boyle", "Membership of Bodies",
+         "Member, An Taisce (National Trust for Ireland)",
+         "2024-07-01", None, None),
+        ("Oliver Moran", "Membership of Bodies",
+         "Member, Cork Cycling Campaign",
+         "2024-07-01", None, None),
+        ("Oliver Moran", "Membership of Bodies",
+         "Member, An Taisce (National Trust for Ireland)",
+         "2024-07-01", None, None),
+        ("Brian McCarthy", "Membership of Bodies",
+         "Member, Irish Council for Civil Liberties (ICCL)",
+         "2024-07-01", None, None),
+        ("Fiona Kerins", "Membership of Bodies",
+         "Member, Cork Simon Community (voluntary capacity)",
+         "2024-07-01", None, None),
+        ("Tony Fitzgerald", "Membership of Bodies",
+         "Member, St Vincent de Paul, Farranree Conference",
+         "2024-07-01", None, None),
+        ("Laura Harmon", "Membership of Bodies",
+         "Member, Amnesty International Ireland",
+         "2024-07-01", None, None),
+        # Consultancy
+        ("Joe Kavanagh", "Consultancy & Advisory",
+         "Property valuation consultancy services to private clients",
+         "2024-07-01", None, None),
+    ]
+
+    for cname, cat, desc, date_decl, date_withdrawn, notes in declarations_data:
+        if cname in councillor_map and cat in cat_map:
+            conn.execute(
+                """INSERT INTO declarations
+                   (councillor_id, category_id, description, date_declared, date_withdrawn, notes)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (councillor_map[cname], cat_map[cat], desc, date_decl, date_withdrawn, notes),
+            )
+    conn.commit()
+
     # --- Sources ---
     sources_data = [
         # News articles — plausible Cork local media URLs
