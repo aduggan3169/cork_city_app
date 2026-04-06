@@ -140,7 +140,7 @@ def load_councillors():
         SELECT c.id, c.first_name, c.last_name,
                c.first_name || ' ' || c.last_name AS full_name,
                p.name AS party, p.short_name AS party_short, p.colour AS party_colour,
-               w.name AS ward, c.active
+               w.name AS ward, c.active, c.photo_url
         FROM councillors c
         JOIN parties p ON c.party_id = p.id
         JOIN wards w ON c.ward_id = w.id
@@ -710,9 +710,22 @@ def page_councillors():
 
     st.markdown("---")
 
-    # --- Profile header ---
-    col1, col2, col3 = st.columns([2, 2, 2])
-    with col1:
+    # --- Profile header (photo + info) ---
+    photo_col, info_col = st.columns([1, 5])
+    with photo_col:
+        photo_url = councillor.get("photo_url", None)
+        if photo_url and str(photo_url) not in ("None", "nan", "") and str(photo_url).startswith("http"):
+            st.image(photo_url, width=120)
+        else:
+            # Fallback: initials avatar via UI Avatars
+            initials = f"{councillor['first_name'][0]}{councillor['last_name'][0]}"
+            party_colour = councillor["party_colour"].lstrip("#")
+            avatar_url = (
+                f"https://ui-avatars.com/api/?name={initials}"
+                f"&background={party_colour}&color=fff&size=120&bold=true&rounded=true"
+            )
+            st.image(avatar_url, width=120)
+    with info_col:
         st.markdown(f"### {councillor['full_name']}")
         colour_swatch = f'<span style="display:inline-block;width:12px;height:12px;background:{councillor["party_colour"]};border-radius:2px;margin-right:6px;"></span>'
         st.markdown(
@@ -720,6 +733,9 @@ def page_councillors():
             unsafe_allow_html=True,
         )
         st.markdown(f"**Ward:** {councillor['ward']}")
+
+    # --- Stats row ---
+    col2, col3 = st.columns(2)
 
     # --- Council-wide averages for comparison ---
     avg_attendance = (
