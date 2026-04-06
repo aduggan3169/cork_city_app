@@ -30,3 +30,6 @@ Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Ingestion script cache (downloaded PDFs)
+scripts/.pdf_cache/
